@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from planner import plan_journeys
+from planner import plan_journeys, stops_list
 
 app = FastAPI(title="Delhi Bus Traffic & Journey Planner")
 
@@ -20,6 +20,22 @@ def serve_ui():
     html_path = os.path.join(BASE_DIR, "index.html")
     with open(html_path, "r", encoding="utf-8") as f:
         return f.read()
+
+@app.get("/stops")
+def search_stops(q: str = Query("", description="Partial stop name")):
+    query = q.strip().lower()
+    if len(query) < 2:
+        return []
+    seen = set()
+    matches = []
+    for s in stops_list:
+        name = s["stop_name"]
+        if query in name.lower() and name not in seen:
+            seen.add(name)
+            matches.append(name)
+            if len(matches) >= 15:
+                break
+    return matches
 
 @app.get("/journeys")
 def get_journeys(

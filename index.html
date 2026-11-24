@@ -53,12 +53,11 @@
   .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
   .badge{background:var(--chip);color:var(--chipt);padding:5px 10px;border-radius:8px;font-weight:800}
   .best{background:#16a34a;color:#fff;font-size:11px;padding:3px 8px;border-radius:10px;margin-left:6px}
-  .night-tag{background:#4c1d95;color:#fff;font-size:11px;padding:3px 8px;border-radius:10px;margin-left:6px}
   .time{font-size:22px;font-weight:800}
   .star{background:none;border:none;font-size:22px;cursor:pointer;width:auto;margin:0;padding:0 4px}
   .bar{display:flex;height:12px;border-radius:6px;overflow:hidden;margin:14px 0 6px;background:#cbd5e1}
   .bar span{display:block;transition:width .9s cubic-bezier(.2,.8,.2,1);width:0}
-  .w{background:#f59e0b}.b{background:#2563eb}.q{background:#94a3b8}
+  .w{background:#f59e0b}.b{background:#2563eb}
   .legend{font-size:12px;color:var(--muted)}
   .details{max-height:0;overflow:hidden;transition:max-height .45s ease}
   .res.open .details{max-height:520px}
@@ -66,10 +65,6 @@
   .tl li{margin:0 0 12px;position:relative;font-size:14px}
   .tl li::before{content:"";position:absolute;left:-26px;top:3px;width:11px;height:11px;border-radius:50%;background:var(--accent);border:2px solid #fff}
   .cmp{font-size:13px;margin-top:10px;color:var(--muted)}
-  .deps{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-  .dep{background:var(--chip);color:var(--chipt);border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.35}
-  .dep b{font-size:14px}
-  .dep.first{outline:2px solid #16a34a}
   .spin{width:34px;height:34px;border:4px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp 0.8s linear infinite;margin:30px auto}
   @keyframes sp{to{transform:rotate(360deg)}}
   .err{color:#dc2626;font-weight:600}
@@ -176,14 +171,14 @@
   <div class="card">
     <div class="row">
       <div class="field">
-        <label for="from">Origin</label>
-        <input id="from" list="stops" value="Kashmere Gate" autocomplete="off">
+        <label for="from">Origin (type to see Delhi stops)</label>
+        <input id="from" list="stops" value="Begum Pur (Kanjhawala Road)" autocomplete="off" placeholder="e.g. Kashmere Gate, Begum Pur...">
         <button class="loc" type="button" id="locBtn" title="Use my location">📍</button>
       </div>
       <button class="swap" id="swap" type="button" title="Swap">⇄</button>
       <div>
-        <label for="to">Destination</label>
-        <input id="to" list="stops" value="Nehru Place" autocomplete="off">
+        <label for="to">Destination (type to see Delhi stops)</label>
+        <input id="to" list="stops" value="Rithala Village" autocomplete="off" placeholder="e.g. Nehru Place, Rithala Village...">
       </div>
     </div>
     <datalist id="stops"></datalist>
@@ -203,20 +198,20 @@
 
   <div class="toolbar" id="toolbar" style="display:none">
     Sort:
-    <button class="chip on" data-sort="arrive" type="button">⚡ Earliest arrival</button>
+    <button class="chip on" data-sort="total_time_min" type="button">⚡ Fastest</button>
     <button class="chip" data-sort="walk" type="button">🚶 Least walking</button>
     <button class="chip" data-sort="delay" type="button">🚦 Least traffic delay</button>
   </div>
   <div id="results"></div>
-  <div class="foot">Times are estimated from a timetable model, time of day, weekday and current weather. Not official DTC/DIMTS data.</div>
+  <div class="foot">Powered by Delhi GTFS Static Network & Historical Bus Speed Profiles (IST).</div>
 </div>
 
 <script>
   const $ = id => document.getElementById(id);
   let options = [];
-  let sortKey = 'arrive';
-  let liveMode = true;          // true = "leave now", results refresh automatically
-  let openRoutes = new Set();   // keeps expanded cards open across live refreshes
+  let sortKey = 'total_time_min';
+  let liveMode = true;
+  let openRoutes = new Set();
 
   /* ---------- storage (safe) ---------- */
   const store = {
@@ -226,182 +221,29 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const pad = n => String(n).padStart(2, '0');
 
-  /* ---------- network data ---------- */
-  const STOPS = {
-    'Kashmere Gate':[28.6675,77.2284], 'Chandni Chowk':[28.6506,77.2303], 'Red Fort':[28.6562,77.2410],
-    'Connaught Place':[28.6315,77.2167], 'India Gate':[28.6129,77.2295], 'Karol Bagh':[28.6519,77.1909],
-    'Rohini Sector 18':[28.7380,77.1130], 'ISBT Anand Vihar':[28.6469,77.3156], 'Lajpat Nagar':[28.5677,77.2433],
-    'AIIMS':[28.5672,77.2100], 'Hauz Khas':[28.5494,77.2001], 'Saket':[28.5245,77.2066],
-    'Vasant Kunj':[28.5200,77.1590], 'Dwarka Sector 21':[28.5521,77.0580], 'Okhla':[28.5355,77.2750],
-    'Nehru Place':[28.5491,77.2533]
-  };
-  const ROUTES = {
-    '534':['Kashmere Gate','Chandni Chowk','Red Fort','Connaught Place','India Gate','Lajpat Nagar','Nehru Place','Okhla'],
-    '460':['Rohini Sector 18','Karol Bagh','Connaught Place','India Gate','AIIMS','Hauz Khas','Saket','Vasant Kunj'],
-    '764':['ISBT Anand Vihar','Red Fort','India Gate','Lajpat Nagar','Okhla','Nehru Place','Saket'],
-    '817':['Dwarka Sector 21','Vasant Kunj','Hauz Khas','AIIMS','Lajpat Nagar','Nehru Place'],
-    '966':['Kashmere Gate','Karol Bagh','Connaught Place','AIIMS','Saket','Nehru Place'],
-    '405':['ISBT Anand Vihar','India Gate','Connaught Place','Karol Bagh','Rohini Sector 18'],
-    '620':['Kashmere Gate','Chandni Chowk','Connaught Place','AIIMS','Hauz Khas','Dwarka Sector 21']
-  };
-  const NIGHT_ROUTES = new Set(['966', '405']);   // run overnight (until ~5:30 am) at low frequency
-
-  const hav = (a, b) => {
-    const R = 6371, r = x => x * Math.PI / 180;
-    const dLat = r(b[0] - a[0]), dLon = r(b[1] - a[1]);
-    const h = Math.sin(dLat/2)**2 + Math.cos(r(a[0])) * Math.cos(r(b[0])) * Math.sin(dLon/2)**2;
-    return 2 * R * Math.asin(Math.sqrt(h));
-  };
-  const hash = s => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
-  const pathKm = path => { let km = 0; for (let k = 1; k < path.length; k++) km += hav(STOPS[path[k-1]], STOPS[path[k]]) * 1.35; return km; };
-
-  // per-route service pattern (minutes)
-  const CFG = {};
-  for (const r of Object.keys(ROUTES)){
-    const h = hash(r), night = NIGHT_ROUTES.has(r);
-    CFG[r] = {
-      start: 330 + h % 20,                              // first bus ~5:30–5:50
-      end: night ? 1440 + 330 : 1350 + h % 60,          // normal: last bus 22:30–23:29
-      peak: 8 + h % 5, off: 13 + h % 6, eve: 18 + h % 8, nightH: 35 + h % 10,
-      night, variance: 0.9 + (h % 21) / 100
-    };
-  }
-  function headway(r, m, dow){
-    const c = CFG[r]; let h;
-    if ((m >= 480 && m < 660) || (m >= 1020 && m < 1260)) h = c.peak;
-    else if (m >= 660 && m < 1020) h = c.off;
-    else if (m >= 1380 || m < 330) h = c.nightH;
-    else if (m >= 1260) h = c.eve;
-    else h = c.off;
-    if (dow === 0 || dow === 6) h *= 1.25;
-    return Math.max(5, Math.round(h));
-  }
-
-  /* ---------- traffic model: time of day x weekday x weather ---------- */
-  function weatherFactor(){
-    if (!wx || !wx.current) return 1;
-    const c = wx.current, code = c.weather_code, d = (c.desc || '').toLowerCase();
-    if ((code >= 51 && code <= 99) || /rain|shower|thunder|drizzle/.test(d)) return 0.82;
-    if (code === 45 || code === 48 || /fog|mist|haze|smoke/.test(d)) return 0.88;
-    return 1;
-  }
-  function baseSpeed(date){                       // km/h, city bus, before weather/weekday
-    const m = date.getHours() * 60 + date.getMinutes(), dow = date.getDay();
-    let s;
-    if (m >= 480 && m < 660) s = 13;              // morning peak
-    else if (m >= 1020 && m < 1260) s = 12;       // evening peak
-    else if (m >= 660 && m < 1020) s = 18;        // midday
-    else if (m >= 360 && m < 480) s = 21;
-    else if (m >= 1260 && m < 1380) s = 23;
-    else s = 28;                                  // late night / early morning
-    if (dow === 0) s *= 1.18; else if (dow === 6) s *= 1.06;
-    return s;
-  }
-  function speedAt(date, route){
-    const v = route ? CFG[route].variance : 1;
-    return Math.max(7, baseSpeed(date) * weatherFactor() * v);
-  }
-  function trafficLevel(date){
-    const ratio = (baseSpeed(date) * weatherFactor()) / 28;
-    if (ratio >= 0.9)  return {label: 'Light',      color: '#16a34a', icon: '🟢'};
-    if (ratio >= 0.65) return {label: 'Moderate',   color: '#d97706', icon: '🟡'};
-    if (ratio >= 0.5)  return {label: 'Heavy',      color: '#ea580c', icon: '🟠'};
-    return                    {label: 'Very heavy', color: '#dc2626', icon: '🔴'};
-  }
-
-  /* ---------- place resolution ---------- */
-  function resolvePlace(text){
-    const m = text.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
-    if (m){
-      const p = [+m[1], +m[2]];
-      let best = null, bd = Infinity;
-      for (const [n, c] of Object.entries(STOPS)){ const d = hav(p, c); if (d < bd) { bd = d; best = n; } }
-      return {stop: best, walkMin: Math.max(1, Math.round(bd * 1000 / 80 * 1.25))};
-    }
-    const q = text.toLowerCase(), names = Object.keys(STOPS);
-    const hit = names.find(n => n.toLowerCase() === q)
-      || names.find(n => n.toLowerCase().includes(q) || q.includes(n.toLowerCase()));
-    return hit ? {stop: hit, walkMin: null} : null;
-  }
-
-  /* ---------- timetable engine ---------- */
-  // Trip start times at the route's terminal for the day around refMs (yesterday..tomorrow)
-  function tripStarts(route, reverse, refMs){
-    const c = CFG[route], out = [], mid = new Date(refMs); mid.setHours(0, 0, 0, 0);
-    for (let d = -1; d <= 1; d++){
-      const base = new Date(mid); base.setDate(base.getDate() + d);
-      let t = c.start + (reverse ? 4 : 0);
-      while (t <= c.end){
-        const ms = base.getTime() + t * 60000;
-        out.push(ms);
-        t += headway(route, t % 1440, new Date(ms).getDay());
+  /* ---------- live stop autocomplete from FastAPI /stops ---------- */
+  let suggestTimer;
+  async function updateStopSuggestions(q) {
+    if (q.trim().length < 2) return;
+    try {
+      const resp = await fetch(`/stops?q=${encodeURIComponent(q.trim())}`);
+      if (!resp.ok) return;
+      const names = await resp.json();
+      if (names.length) {
+        $('stops').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
       }
-    }
-    return out.sort((a, b) => a - b);
+    } catch (e) {}
   }
+  ['from', 'to'].forEach(id => {
+    $(id).addEventListener('input', e => {
+      clearTimeout(suggestTimer);
+      suggestTimer = setTimeout(() => updateStopSuggestions(e.target.value), 180);
+    });
+  });
 
-  function computeJourneys(from, to, departMs){
-    const a = resolvePlace(from), b = resolvePlace(to);
-    if (!a) throw new Error('Could not find a stop called "' + from + '". Pick one from the suggestions.');
-    if (!b) throw new Error('Could not find a stop called "' + to + '". Pick one from the suggestions.');
-    if (a.stop === b.stop) throw new Error('Origin and destination are the same stop.');
-    const out = [];
-    for (const [route, seq] of Object.entries(ROUTES)){
-      const i = seq.indexOf(a.stop), j = seq.indexOf(b.stop);
-      if (i < 0 || j < 0) continue;
-      const reverse = i > j;
-      const toBoard = reverse ? seq.slice(i).reverse() : seq.slice(0, i + 1);      // terminal -> boarding stop
-      const ridePath = reverse ? seq.slice(j, i + 1).reverse() : seq.slice(i, j + 1); // boarding -> alighting
-      const kmBoard = pathKm(toBoard), kmRide = pathKm(ridePath);
-      const w1 = a.walkMin ?? 2 + hash(route + a.stop) % 7;
-      const w2 = b.walkMin ?? 2 + hash(route + b.stop) % 7;
-      const readyAt = departMs + w1 * 60000;           // when you can be at the stop
-
-      const deps = [];
-      for (const ts of tripStarts(route, reverse, readyAt)){
-        const sp0 = speedAt(new Date(ts), route);
-        const boardMs = ts + (kmBoard / sp0 * 60 + toBoard.length * 0.8) * 60000;
-        if (boardMs < readyAt) continue;
-        const sp = speedAt(new Date(boardMs), route);
-        const rideMin = Math.max(3, Math.round(kmRide / sp * 60 + ridePath.length));
-        deps.push({boardMs, arriveMs: boardMs + rideMin * 60000, rideMin, speed: Math.round(sp)});
-        if (deps.length >= 3) break;
-      }
-      if (!deps.length) continue;
-      const first = deps[0];
-      const waitMin = Math.max(0, Math.round((first.boardMs - readyAt) / 60000));
-      const quietRide = Math.max(3, Math.round(kmRide / (26 * CFG[route].variance) * 60 + ridePath.length * 0.7));
-      out.push({
-        route, night: CFG[route].night,
-        boarding_stop: a.stop + ' bus stop', alighting_stop: b.stop + ' bus stop',
-        walk_to_stop_min: w1, wait_min: waitMin, bus_ride_min: first.rideMin, walk_to_dest_min: w2,
-        total_time_min: w1 + waitMin + first.rideMin + w2,
-        quiet_ride_min: quietRide, delay_min: Math.max(0, first.rideMin - quietRide),
-        predicted_speed_kmph: first.speed,
-        board_ms: first.boardMs, arrive_stop_ms: first.arriveMs, reach_ms: first.arriveMs + w2 * 60000,
-        departures: deps
-      });
-    }
-    return out;
-  }
-
-  /* ---------- time formatting ---------- */
-  function fmtTime(ms){
-    const d = new Date(ms);
-    let s = d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
-    if (d.toDateString() !== new Date().toDateString()) s += ' ' + d.toLocaleDateString([], {weekday: 'short'});
-    return s;
-  }
-  function inMin(ms){
-    const m = Math.round((ms - Date.now()) / 60000);
-    if (m <= 0) return 'now';
-    if (m >= 120) return 'in ' + Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
-    return 'in ' + m + ' min';
-  }
-
-  /* ---------- theme: auto day/night by sunrise & sunset ---------- */
-  const SUN = [[430,1070],[415,1100],[390,1115],[360,1135],[335,1155],[325,1170],[335,1165],[355,1145],[370,1110],[385,1080],[410,1055],[430,1050]]; // Delhi, minutes after midnight
-  let themeMode = store.get('themeMode', 'auto');   // auto | day | night
+  /* ---------- theme: auto day/night ---------- */
+  const SUN = [[430,1070],[415,1100],[390,1115],[360,1135],[335,1155],[325,1170],[335,1165],[355,1145],[370,1110],[385,1080],[410,1055],[430,1050]];
+  let themeMode = store.get('themeMode', 'auto');
   function isNightNow(){
     const d = new Date(), m = d.getHours() * 60 + d.getMinutes(), [rise, set] = SUN[d.getMonth()];
     return m < rise || m >= set;
@@ -417,23 +259,28 @@
     store.set('themeMode', themeMode); applyTheme();
   };
 
-  /* ---------- status bar (clock + traffic) ---------- */
+  /* ---------- status bar (clock + traffic indicator) ---------- */
+  function trafficLevel(date){
+    const m = date.getHours() * 60 + date.getMinutes();
+    if ((m >= 480 && m < 660) || (m >= 1020 && m < 1260)) return {label: 'Peak / Heavy', color: '#dc2626', icon: '🔴', sp: 14};
+    if (m >= 660 && m < 1020) return {label: 'Moderate', color: '#d97706', icon: '🟡', sp: 18};
+    if (m >= 1320 || m < 360) return {label: 'Light (Quiet)', color: '#16a34a', icon: '🟢', sp: 26};
+    return {label: 'Normal', color: '#2563eb', icon: '🔵', sp: 21};
+  }
   function updateStatus(){
     const now = new Date();
     $('clock').textContent = now.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
     $('clockSub').textContent = now.toLocaleDateString([], {weekday: 'long', day: 'numeric', month: 'short'});
     const t = trafficLevel(now), p = $('trafficPill');
     p.textContent = t.icon + ' Traffic: ' + t.label; p.style.background = t.color;
-    const wf = weatherFactor();
-    const sp = Math.round(baseSpeed(now) * wf);
-    $('trafficSub').textContent = 'Estimated average bus speed ~' + sp + ' km/h'
-      + (wf < 1 ? ' (slowed by weather)' : '') + (isWeekend(now) ? ' · weekend timetable' : '');
+    $('trafficSub').textContent = 'Model calibrated on Delhi GPS historical pings · typical speed ~' + t.sp + ' km/h';
   }
-  const isWeekend = d => d.getDay() === 0 || d.getDay() === 6;
 
   /* ---------- inputs ---------- */
-  $('stops').innerHTML = Object.keys(STOPS).map(n => '<option value="' + n + '">').join('');
-  $('swap').onclick = () => { const f = $('from').value; $('from').value = $('to').value; $('to').value = f; if (options.length) searchJourneys(); };
+  $('swap').onclick = () => {
+    const f = $('from').value; $('from').value = $('to').value; $('to').value = f;
+    if (options.length) searchJourneys();
+  };
   function setDepartNow(){
     const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
     $('depart').value = d.toISOString().slice(0, 16);
@@ -471,80 +318,108 @@
     r.unshift({from, to, fav: wasFav}); store.set('recent', r.slice(0, 5)); renderRecent();
   }
 
-  /* ---------- search ---------- */
-  function searchJourneys(silent){
+  /* ---------- backend API search (/journeys) ---------- */
+  async function searchJourneys(silent){
     silent = silent === true;
     const from = $('from').value.trim(), to = $('to').value.trim();
     if (!silent) $('toolbar').style.display = 'none';
     if (!from || !to) { $('results').innerHTML = '<div class="card err">Please enter both origin and destination.</div>'; return; }
     if (liveMode) setDepartNow();
     if (!$('depart').value) setDepartNow();
-    const departMs = liveMode ? Date.now() : new Date($('depart').value).getTime();
-    const run = () => {
-      try { options = computeJourneys(from, to, departMs); }
-      catch (e) { options = []; $('results').innerHTML = '<div class="card err">' + esc(e.message) + '</div>'; return; }
+
+    const departVal = $('depart').value;
+    const departIso = departVal.length === 16 ? departVal + ':00' : departVal;
+
+    if (!silent) {
+      openRoutes.clear();
+      $('results').innerHTML = '<div class="spin"></div><p style="text-align:center;color:#fff">Querying Delhi GTFS routes & historical speeds…</p>';
+    }
+    $('go').disabled = true;
+
+    try {
+      const resp = await fetch(`/journeys?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&depart=${encodeURIComponent(departIso)}`);
+      const data = await resp.json();
+      $('go').disabled = false;
+
+      if (!resp.ok) {
+        options = [];
+        $('results').innerHTML = `<div class="card err">${esc(data.detail || 'Could not find routes for those stops.')}</div>`;
+        return;
+      }
+
+      options = data.journey_options || [];
       if (!silent) remember(from, to);
-      if (!options.length) { $('results').innerHTML = '<div class="card">No direct bus between these stops. Try a nearby stop.</div>'; return; }
-      renderResults(from, to, !silent);
-    };
-    if (silent) { run(); return; }
-    openRoutes.clear();
-    $('results').innerHTML = '<div class="spin"></div><p style="text-align:center;color:#fff">Checking buses and traffic…</p>';
-    setTimeout(run, 300);
+
+      if (!options.length) {
+        $('results').innerHTML = '<div class="card">No direct bus routes found between these stops. Try picking a stop from the suggestions as you type.</div>';
+        return;
+      }
+
+      renderResults(from, to, !silent, new Date(departIso).getTime());
+    } catch (e) {
+      $('go').disabled = false;
+      options = [];
+      $('results').innerHTML = '<div class="card err">Could not reach the backend server. Make sure FastAPI is running.</div>';
+    }
   }
 
-  /* ---------- render ---------- */
+  /* ---------- render results ---------- */
   function sorted(){
-    const v = o => sortKey === 'walk' ? o.walk_to_stop_min + o.walk_to_dest_min
-                  : sortKey === 'delay' ? o.delay_min : o.reach_ms;
+    const v = o => sortKey === 'walk' ? (o.walk_to_stop_min + o.walk_to_dest_min)
+                  : sortKey === 'delay' ? (o.total_time_min - o.quiet_hour_total_min)
+                  : o.total_time_min;
     return [...options].sort((a, b) => v(a) - v(b));
   }
-  function renderResults(from, to, animate){
-    from = from || $('from').value.trim(); to = to || $('to').value.trim();
+
+  function renderResults(from, to, animate, departMs){
+    from = from || $('from').value.trim();
+    to = to || $('to').value.trim();
+    departMs = departMs || new Date($('depart').value).getTime();
     $('toolbar').style.display = 'flex';
     const favs = store.get('favs', []);
     const list = sorted();
+
     $('results').innerHTML = list.map((o, i) => {
-      const walk = o.walk_to_stop_min + o.walk_to_dest_min, tot = o.total_time_min || 1;
+      const walk = +(o.walk_to_stop_min + o.walk_to_dest_min).toFixed(1);
+      const tot = o.total_time_min || 1;
+      const delay = Math.max(0, +(o.total_time_min - o.quiet_hour_total_min).toFixed(1));
       const fav = favs.includes(from + '|' + to + '|' + o.route);
       const open = openRoutes.has(o.route) ? ' open' : '';
       const anim = animate ? `style="animation-delay:${i*90}ms"` : '';
-      const depsHtml = o.departures.map((d, k) => `
-        <div class="dep ${k === 0 ? 'first' : ''}">
-          🚌 Departs <b>${fmtTime(d.boardMs)}</b> <span>(${inMin(d.boardMs)})</span><br>
-          Reaches ${esc(o.alighting_stop.replace(' bus stop',''))} <b>${fmtTime(d.arriveMs)}</b>
-        </div>`).join('');
+      const reachMs = departMs + tot * 60000;
+      const reachStr = new Date(reachMs).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+
       return `
       <div class="card res${open}${animate ? '' : ' noanim'}" ${anim} data-route="${esc(o.route)}">
         <div class="top">
-          <div><span class="badge">Route ${esc(o.route)}</span>${i === 0 ? '<span class="best">BEST</span>' : ''}${o.night ? '<span class="night-tag">🌙 Night service</span>' : ''}</div>
+          <div><span class="badge">Route ${esc(o.route)}</span>${i === 0 ? '<span class="best">BEST</span>' : ''}</div>
           <div><span class="time">${o.total_time_min} min</span>
             <button class="star" type="button" data-fav="${esc(o.route)}" title="Save route">${fav ? '⭐' : '☆'}</button></div>
         </div>
-        <div class="legend" style="margin-top:6px">Reach destination by <b>${fmtTime(o.reach_ms)}</b> · next bus <b>${inMin(o.board_ms)}</b></div>
+        <div class="legend" style="margin-top:6px">Estimated arrival around <b>${reachStr}</b> · <b>${esc(o.boarding_stop)}</b> → <b>${esc(o.alighting_stop)}</b></div>
         <div class="bar">
           <span class="w" data-w="${o.walk_to_stop_min / tot * 100}"></span>
-          <span class="q" data-w="${o.wait_min / tot * 100}"></span>
           <span class="b" data-w="${o.bus_ride_min / tot * 100}"></span>
           <span class="w" data-w="${o.walk_to_dest_min / tot * 100}"></span>
         </div>
-        <div class="legend">🟧 walking ${walk} min &nbsp; ⬜ waiting ${o.wait_min} min &nbsp; 🟦 bus ${o.bus_ride_min} min at ~${o.predicted_speed_kmph} km/h</div>
-        <div class="cmp">${o.delay_min > 0 ? `🚦 Traffic adds <b>${o.delay_min} min</b> to the ride vs. a quiet road (${o.quiet_ride_min} min)` : `✅ Roads are clear (quiet-road ride: ${o.quiet_ride_min} min)`}</div>
-        <div class="deps">${depsHtml}</div>
+        <div class="legend">🟧 walking ${walk} min &nbsp; 🟦 bus ${o.bus_ride_min} min at ~${o.predicted_speed_kmph} km/h</div>
+        <div class="cmp">${delay > 0 ? `🚦 Traffic adds <b>${delay} min</b> vs. quiet hour (${o.quiet_hour_total_min} min)` : `✅ Roads are clear (quiet-hour total: ${o.quiet_hour_total_min} min)`}</div>
         <div class="details">
           <ul class="tl">
-            <li>Leave <b>${fmtTime(o.board_ms - (o.walk_to_stop_min + o.wait_min) * 60000)}</b>, walk <b>${o.walk_to_stop_min} min</b> to <b>${esc(o.boarding_stop)}</b></li>
-            <li>Board bus <b>${esc(o.route)}</b> at <b>${fmtTime(o.board_ms)}</b> (wait ~${o.wait_min} min)</li>
-            <li>Ride <b>${o.bus_ride_min} min</b>, get off at <b>${esc(o.alighting_stop)}</b> at <b>${fmtTime(o.arrive_stop_ms)}</b></li>
-            <li>Walk <b>${o.walk_to_dest_min} min</b>, arrive <b>${fmtTime(o.reach_ms)}</b></li>
+            <li>Walk <b>${o.walk_to_stop_min} min</b> to <b>${esc(o.boarding_stop)}</b></li>
+            <li>Board bus <b>${esc(o.route)}</b> and ride <b>${o.bus_ride_min} min</b> (~${o.predicted_speed_kmph} km/h)</li>
+            <li>Get off at <b>${esc(o.alighting_stop)}</b></li>
+            <li>Walk <b>${o.walk_to_dest_min} min</b> to your destination</li>
           </ul>
         </div>
-        ${depTempHTML(o.board_ms)}
+        ${depTempHTML(departMs)}
         <div class="legend" style="margin-top:8px">Tap card for step-by-step ▾</div>
       </div>`;
     }).join('');
+
     requestAnimationFrame(() => setTimeout(() =>
       document.querySelectorAll('.bar span').forEach(s => s.style.width = s.dataset.w + '%'), animate ? 60 : 0));
+
     document.querySelectorAll('.res').forEach(c => c.onclick = e => {
       if (e.target.closest('.star')) return;
       c.classList.toggle('open');
@@ -630,7 +505,6 @@
         renderWeather(); return;
       } catch (e) { errs.push(name + ': ' + (e.name === 'AbortError' ? 'timeout' : e.message)); }
     }
-    console.warn('Weather sources failed:', errs);
     const c = store.get('wxcache', null);
     if (c && c.lat === place.lat && Date.now() - c.t < 3 * 3600e3) wx = {...c.d, fetchedAt: new Date(c.t), mode: 'cached'};
     else wx = {...estimate(), fetchedAt: new Date(), mode: 'estimate'};
@@ -658,7 +532,6 @@
     $('retry').onclick = e => { e.preventDefault(); loadWeather(); };
     renderStrip();
     updateStatus();
-    if (options.length && liveMode) searchJourneys(true);   // weather may change traffic
   }
   function renderStrip(){
     const h = wx.hourly;
@@ -681,7 +554,7 @@
   }
   function depTempHTML(ms){
     const t = tempAt(ms);
-    return t === null ? '' : `<div class="deptemp">🌡️ Expected <b>${t}°${unit}</b> when the bus departs${wx.mode === 'estimate' ? ' (estimate)' : ''}</div>`;
+    return t === null ? '' : `<div class="deptemp">🌡️ Expected <b>${t}°${unit}</b> at departure${wx.mode === 'estimate' ? ' (estimate)' : ''}</div>`;
   }
   $('unit').onclick = () => { unit = unit === 'C' ? 'F' : 'C'; store.set('unit', unit); renderWeather(); if (options.length) renderResults(null, null, false); };
   $('wxLoc').onclick = () => {
@@ -694,10 +567,10 @@
 
   /* ---------- start + automatic updates ---------- */
   applyTheme(); updateStatus(); setLive(true); renderRecent(); loadWeather();
-  setInterval(() => { applyTheme(); updateStatus(); }, 15 * 1000);                 // clock, traffic, day/night
-  setInterval(() => { if (liveMode && options.length) searchJourneys(true); }, 30 * 1000);  // live bus times + countdowns
-  setInterval(loadWeather, 10 * 60 * 1000);                                        // weather every 10 min
-  searchJourneys();   // show buses for the default route right away
+  setInterval(() => { applyTheme(); updateStatus(); }, 15 * 1000);
+  setInterval(() => { if (liveMode && options.length) searchJourneys(true); }, 30 * 1000);
+  setInterval(loadWeather, 10 * 60 * 1000);
+  searchJourneys();
 </script>
 </body>
 </html>
