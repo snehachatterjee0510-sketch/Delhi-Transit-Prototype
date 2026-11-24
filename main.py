@@ -1,6 +1,7 @@
+import os
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from planner import plan_journeys
 
 app = FastAPI(title="Delhi Bus Traffic & Journey Planner")
@@ -12,9 +13,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+@app.get("/", response_class=HTMLResponse)
 def serve_ui():
-    return FileResponse("index.html")
+    html_path = os.path.join(BASE_DIR, "index.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        return f.read()
 
 @app.get("/journeys")
 def get_journeys(
