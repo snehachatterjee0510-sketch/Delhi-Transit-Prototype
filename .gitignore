@@ -1,0 +1,9 @@
+Data/Historical/
+*.db
+*.7z
+venv/
+__pycache__/
+*.pyc
+
+Data/gtfs/stop_times.txt
+Data/gtfs/shapes.txt
